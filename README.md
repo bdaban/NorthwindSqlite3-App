@@ -105,9 +105,7 @@ API uç noktaları `/server/api` dizininde tanımlanmıştır ve aşağıdaki ge
 - `PUT /api/[resource]/update/[id]`: Mevcut bir kaynağı günceller
 - `DELETE /api/[resource]/[id]`: Bir kaynağı siler
 
-## 🌐 Canlı Demo
 
-[Canlı demo URL'si](https://projenizin-canlı-url.com) (mevcutsa)
 
 ## 🤝 Katkıda Bulunma
 
