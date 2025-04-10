@@ -1,0 +1,158 @@
+<template>
+  <div>
+    <div class="bg-white p-6 rounded-lg shadow-md">
+      <div class="mb-6">
+        <NuxtLink to="/orders" class="text-blue-600 hover:underline flex items-center">
+          <span class="mr-1">←</span> Siparişlere Dön
+        </NuxtLink>
+      </div>
+
+      <div v-if="pending" class="flex justify-center py-8">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+
+      <div v-else-if="error">
+        <p class="text-red-500">{{ error.message }}</p>
+      </div>
+
+      <div v-else-if="!order" class="py-8 text-center">
+        <p class="text-gray-500">Sipariş bulunamadı.</p>
+      </div>
+
+      <div v-else>
+        <h1 class="text-2xl font-bold text-gray-800 mb-6">Sipariş #{{ order.OrderID }}</h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div>
+            <div class="bg-amber-50 p-4 rounded-lg">
+              <h2 class="text-lg font-semibold text-amber-800 mb-3">Sipariş Bilgileri</h2>
+              
+              <div class="space-y-2">
+                <p><span class="font-medium">Sipariş ID:</span> {{ order.OrderID }}</p>
+                <p v-if="order.Customers"><span class="font-medium">Müşteri:</span> 
+                  <NuxtLink :to="`/customers/${order.CustomerID}`" class="text-blue-600 hover:underline">
+                    {{ order.Customers.CompanyName }}
+                  </NuxtLink>
+                </p>
+                <p v-if="order.Employees"><span class="font-medium">Çalışan:</span> {{ order.Employees.FirstName }} {{ order.Employees.LastName }}</p>
+                <p><span class="font-medium">Sipariş Tarihi:</span> {{ formatDate(order.OrderDate) }}</p>
+                <p><span class="font-medium">Gerekli Tarih:</span> {{ formatDate(order.RequiredDate) }}</p>
+                <p><span class="font-medium">Gönderim Tarihi:</span> {{ formatDate(order.ShippedDate) }}</p>
+                <p v-if="order.Shippers"><span class="font-medium">Nakliyeci:</span> {{ order.Shippers.CompanyName }}</p>
+                <p><span class="font-medium">Nakliye Ücreti:</span> {{ order.Freight }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="bg-blue-50 p-4 rounded-lg">
+              <h2 class="text-lg font-semibold text-blue-800 mb-3">Gönderim Bilgileri</h2>
+              
+              <div class="space-y-2">
+                <p><span class="font-medium">Alıcı:</span> {{ order.ShipName }}</p>
+                <p><span class="font-medium">Adres:</span> {{ order.ShipAddress }}</p>
+                <p><span class="font-medium">Şehir:</span> {{ order.ShipCity }}</p>
+                <p v-if="order.ShipRegion"><span class="font-medium">Bölge:</span> {{ order.ShipRegion }}</p>
+                <p><span class="font-medium">Posta Kodu:</span> {{ order.ShipPostalCode }}</p>
+                <p><span class="font-medium">Ülke:</span> {{ order.ShipCountry }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="orderDetails && orderDetails.length > 0">
+          <h2 class="text-xl font-semibold text-gray-800 mb-4">Sipariş Detayları</h2>
+          
+          <div class="overflow-x-auto">
+            <table class="min-w-full bg-white">
+              <thead class="bg-gray-100">
+                <tr>
+                  <th class="py-3 px-4 text-left">Ürün</th>
+                  <th class="py-3 px-4 text-left">Birim Fiyat</th>
+                  <th class="py-3 px-4 text-left">Miktar</th>
+                  <th class="py-3 px-4 text-left">İndirim</th>
+                  <th class="py-3 px-4 text-left">Toplam</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="detail in orderDetails" :key="`${detail.OrderID}-${detail.ProductID}`" class="border-b hover:bg-gray-50">
+                  <td class="py-3 px-4">
+                    <NuxtLink :to="`/products/${detail.ProductID}`" class="text-blue-600 hover:underline">
+                      {{ detail.Products.ProductName }}
+                    </NuxtLink>
+                  </td>
+                  <td class="py-3 px-4">{{ detail.UnitPrice }}</td>
+                  <td class="py-3 px-4">{{ detail.Quantity }}</td>
+                  <td class="py-3 px-4">{{ formatPercent(detail.Discount) }}</td>
+                  <td class="py-3 px-4">{{ calculateTotal(detail.UnitPrice, detail.Quantity, detail.Discount) }}</td>
+                </tr>
+              </tbody>
+              <tfoot class="bg-gray-50 font-medium">
+                <tr>
+                  <td colspan="4" class="py-3 px-4 text-right">Ara Toplam:</td>
+                  <td class="py-3 px-4">{{ calculateSubTotal() }}</td>
+                </tr>
+                <tr>
+                  <td colspan="4" class="py-3 px-4 text-right">Nakliye Ücreti:</td>
+                  <td class="py-3 px-4">{{ order.Freight }}</td>
+                </tr>
+                <tr class="bg-gray-100">
+                  <td colspan="4" class="py-3 px-4 text-right font-bold">Toplam:</td>
+                  <td class="py-3 px-4 font-bold">{{ calculateGrandTotal() }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+        
+        <div v-else class="py-4 text-center bg-gray-50 rounded-lg">
+          <p class="text-gray-500">Sipariş detayları bulunamadı.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+const route = useRoute()
+const orderId = parseInt(route.params.id)
+
+const { data: order, pending, error } = await useFetch(`/api/orders/${orderId}`)
+const { data: orderDetails } = await useFetch(`/api/orders/${orderId}/details`)
+
+function formatDate(dateString) {
+  if (!dateString) return 'Belirtilmemiş'
+  
+  const date = new Date(dateString)
+  return new Intl.DateTimeFormat('tr-TR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  }).format(date)
+}
+
+function formatPercent(value) {
+  return `${Math.round(value * 100)}%`
+}
+
+function calculateTotal(unitPrice, quantity, discount) {
+  return (unitPrice * quantity * (1 - discount)).toFixed(2)
+}
+
+function calculateSubTotal() {
+  if (!orderDetails.value) return 0
+  
+  return orderDetails.value.reduce((total, detail) => {
+    return total + parseFloat(calculateTotal(detail.UnitPrice, detail.Quantity, detail.Discount))
+  }, 0).toFixed(2)
+}
+
+function calculateGrandTotal() {
+  if (!orderDetails.value || !order.value) return 0
+  
+  const subTotal = parseFloat(calculateSubTotal())
+  const freight = parseFloat(order.value.Freight || 0)
+  
+  return (subTotal + freight).toFixed(2)
+}
+</script> 
